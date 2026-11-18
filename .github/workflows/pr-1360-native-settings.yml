@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          fetch-depth: 3
+          fetch-depth: 0
       - name: Select the SDK used by the repo’s Intel acceptance job
         run: |
           test -d /Applications/Xcode_26.3.app/Contents/Developer
@@ -41,7 +41,7 @@ jobs:
         run: |
           swiftc scripts/pr-1360-native-settings.swift -o "$RUNNER_TEMP/minutes-settings-check"
       - name: Install the repo-pinned Tauri CLI
-        run: .github/scripts/install-tauri-cli.sh 2.10.1
+        run: cargo install tauri-cli --version 2.10.1 --locked
       - name: Run the repository dev-app installer
         run: |
           set -o pipefail

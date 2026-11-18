@@ -1,0 +1,87 @@
+name: Minutes 1360 native Settings
+on:
+  push:
+    branches: [verify/pr-1360-native-settings]
+permissions:
+  contents: read
+env:
+  PR_SHA: 76d7ae465687dcc0cc61e50b0eba6bc0335f65c8
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+jobs:
+  native-settings:
+    name: Install and click-test Minutes Dev (macOS arm64)
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check exact PR source and prepare evidence directory
+        run: |
+          test "$(git rev-parse HEAD^)" = "$PR_SHA"
+          git diff --exit-code "$PR_SHA" HEAD -- . ':!.github/workflows/pr-1360-native-settings.yml' ':!scripts/pr-1360-native-settings.swift'
+          mkdir "$RUNNER_TEMP/native-settings"
+          {
+            printf 'PR source SHA %s\n' "$PR_SHA"
+            sw_vers
+            uname -m
+            xcodebuild -version
+          } | tee "$RUNNER_TEMP/native-settings/environment.log"
+      - name: Compile the native click-through harness
+        run: |
+          swiftc scripts/pr-1360-native-settings.swift -o "$RUNNER_TEMP/minutes-settings-check"
+      - name: Install the repo-pinned Tauri CLI
+        run: .github/scripts/install-tauri-cli.sh 2.10.1
+      - name: Run the repository dev-app installer
+        run: |
+          set -o pipefail
+          ./scripts/install-dev-app.sh --no-open 2>&1 | tee "$RUNNER_TEMP/native-settings/install.log"
+          codesign --verify --deep --strict "$HOME/Applications/Minutes Dev.app"
+      - name: Click through the installed app and save screenshots
+        run: |
+          set -o pipefail
+          proof="$RUNNER_TEMP/native-settings"
+          profile="$RUNNER_TEMP/minutes-settings-profile"
+          mkdir -p "$profile/meetings"
+          export MINUTES_CONFIG_PATH="$profile/config.toml"
+          export MINUTES_DATA_DIR="$profile/data"
+          printf 'output_dir = "%s"\n[privacy]\nhide_from_screen_share = false\n' "$profile/meetings" > "$MINUTES_CONFIG_PATH"
+          "$HOME/Applications/Minutes Dev.app/Contents/MacOS/minutes-app" > "$proof/app.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          "$RUNNER_TEMP/minutes-settings-check" "$app_pid" "$proof" "$MINUTES_CONFIG_PATH" 2>&1 | tee "$proof/click-through.log"
+      - name: Upload native screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: minutes-1360-settings-macos-arm64
+          path: ${{ runner.temp }}/native-settings/
+          if-no-files-found: error
+  desktop-tests:
+    name: Run desktop unit tests and Settings regression
+    runs-on: macos-26
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.PR_SHA }}
+          persist-credentials: false
+      - name: Configure the native compiler
+        run: |
+          mkdir "$RUNNER_TEMP/settings-tests"
+          echo "CXXFLAGS=-I$(xcrun --show-sdk-path)/usr/include/c++/v1" >> "$GITHUB_ENV"
+          cargo --version
+      - name: Run frontend and desktop suites
+        run: |
+          set -o pipefail
+          node scripts/test_remote_transcription_settings.mjs | tee "$RUNNER_TEMP/settings-tests/frontend.log"
+          cargo test -p minutes-app --no-default-features -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/settings-tests/desktop.log"
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: minutes-1360-settings-test-logs
+          path: ${{ runner.temp }}/settings-tests/
+          if-no-files-found: error

@@ -91,22 +91,25 @@ fn plugin_file_name() -> &'static str {
 /// Where the plugin is looked for, in order.
 ///
 /// `MINUTES_SHERPA_PLUGIN` wins so a developer can point at a freshly built
-/// dylib in `target/` without installing it. Otherwise it is looked for beside
-/// the running executable, which is how a packaged app carries it, and then in
-/// the Minutes install root. Release archives and the macOS app carry it beside
-/// the executable; a source build copies it there or points the variable at
-/// `target/`.
+/// dylib in `target/` without installing it. The loader then searches beside
+/// the resolved executable, beside its symlink, and in the Minutes install root.
+/// Release archives and the macOS app carry it beside the executable.
 pub fn candidate_paths(config: &Config) -> Vec<PathBuf> {
+    candidate_paths_for_executable(config, std::env::current_exe().ok().as_deref())
+}
+
+fn candidate_paths_for_executable(config: &Config, exe: Option<&Path>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(explicit) = std::env::var("MINUTES_SHERPA_PLUGIN") {
         if !explicit.trim().is_empty() {
             candidates.push(PathBuf::from(explicit));
         }
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            candidates.push(dir.join(plugin_file_name()));
-        }
+    if let Some(exe) = exe {
+        candidates.extend(crate::executable_paths::beside_executable(
+            exe,
+            plugin_file_name(),
+        ));
     }
     candidates.push(
         crate::sherpa_engine::installs_root(config)
@@ -484,6 +487,66 @@ mod tests {
             let paths = candidate_paths(&config);
             assert!(!paths.is_empty());
             assert!(paths.iter().all(|p| p.file_name().is_some()));
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn finds_plugin_beside_symlink_target() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path().join("Minutes.app/Contents/MacOS");
+        std::fs::create_dir_all(&bundle_dir).unwrap();
+        let binary = bundle_dir.join("minutes");
+        std::fs::File::create(&binary).unwrap();
+        let plugin = bundle_dir.join(plugin_file_name());
+        std::fs::File::create(&plugin).unwrap();
+
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir(&bin_dir).unwrap();
+        let link = bin_dir.join("minutes");
+        std::os::unix::fs::symlink(&binary, &link).unwrap();
+
+        let found = crate::executable_paths::beside_executable(&link, plugin_file_name())
+            .into_iter()
+            .find(|path| path.is_file());
+        assert_eq!(found, Some(plugin.canonicalize().unwrap()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn candidate_paths_search_symlink_target_then_link_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle_dir = temp.path().join("bundle");
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir(&bundle_dir).unwrap();
+        std::fs::create_dir(&bin_dir).unwrap();
+        let binary = bundle_dir.join("minutes");
+        let link = bin_dir.join("minutes");
+        std::fs::File::create(&binary).unwrap();
+        std::os::unix::fs::symlink(&binary, &link).unwrap();
+
+        let target_plugin = bundle_dir.canonicalize().unwrap().join(plugin_file_name());
+        let link_plugin = bin_dir.join(plugin_file_name());
+        std::fs::File::create(&target_plugin).unwrap();
+        std::fs::File::create(&link_plugin).unwrap();
+
+        let config = Config::default();
+        temp_env_var("MINUTES_SHERPA_PLUGIN", None, || {
+            let paths = candidate_paths_for_executable(&config, Some(&link));
+            let installed = crate::sherpa_engine::installs_root(&config)
+                .join("lib")
+                .join(plugin_file_name());
+            assert_eq!(
+                paths,
+                [target_plugin.clone(), link_plugin.clone(), installed]
+            );
+            assert_eq!(
+                paths.iter().find(|path| path.is_file()),
+                Some(&target_plugin)
+            );
+
+            std::fs::remove_file(&target_plugin).unwrap();
+            assert_eq!(paths.iter().find(|path| path.is_file()), Some(&link_plugin));
         });
     }
 

@@ -129,17 +129,16 @@ fn verified(path: &Path, sha256: &str, bytes: u64) -> Result<bool, String> {
     Ok(format!("{:x}", digest.finalize()) == sha256)
 }
 
-/// The worker executable: `MINUTES_EMBED_WORKER`, else beside this binary
-/// (inside the app bundle that is `Contents/MacOS`).
+/// The worker executable: `MINUTES_EMBED_WORKER`, then beside the resolved
+/// executable, then beside its symlink.
 pub fn worker_path() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("MINUTES_EMBED_WORKER").filter(|p| !p.is_empty()) {
         return Some(PathBuf::from(path));
     }
-    let beside = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .join(WORKER_FILENAME);
-    beside.is_file().then_some(beside)
+    let exe = std::env::current_exe().ok()?;
+    crate::executable_paths::beside_executable(&exe, WORKER_FILENAME)
+        .into_iter()
+        .find(|path| path.is_file())
 }
 
 /// A running embedding worker. Dropping it stops the process.

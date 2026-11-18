@@ -775,8 +775,8 @@ fn query_overlap_via_eventkit_with_helper(
 /// Find the compiled calendar-events helper binary.
 ///
 /// Lookup order:
-/// 1. `<exe>/calendar-events` — inside a packaged .app bundle at
-///    `Contents/MacOS/calendar-events`. Tauri places it there because
+/// 1. `calendar-events` beside the resolved executable, then beside its
+///    symlink. In a packaged app, Tauri places it in `Contents/MacOS` because
 ///    `tauri.macos.conf.json` declares it as an `externalBin`. This
 ///    placement lets Tauri sign and notarize the helper in lockstep
 ///    with the main binary. (Earlier releases declared it under
@@ -799,11 +799,11 @@ fn query_overlap_via_eventkit_with_helper(
 #[cfg(target_os = "macos")]
 fn find_calendar_helper() -> Option<std::path::PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let beside = dir.join("calendar-events");
-            if beside.exists() {
-                return Some(beside);
-            }
+        if let Some(helper) = crate::executable_paths::beside_executable(&exe, "calendar-events")
+            .into_iter()
+            .find(|path| path.exists())
+        {
+            return Some(helper);
         }
     }
     // CARGO_MANIFEST_DIR points at crates/core; the workspace root is two up.

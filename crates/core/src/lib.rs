@@ -162,6 +162,7 @@ mod entity_resolution_eval;
 pub mod error;
 pub mod events;
 pub mod evidence;
+mod executable_paths;
 pub mod ffmpeg;
 pub mod graph;
 pub mod graph_worker;

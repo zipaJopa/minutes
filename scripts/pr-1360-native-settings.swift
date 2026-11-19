@@ -55,6 +55,26 @@ func frame(_ element: AXUIElement) -> CGRect? {
     return CGRect(origin: origin, size: bounds)
 }
 
+// wry's WKWebView refuses first mouse (accept_first_mouse defaults to false), so a
+// click into a window that is not key only activates it and never reaches the DOM.
+func isKeyAndFrontmost(_ app: AXUIElement, _ window: AXUIElement, _ pid: pid_t) -> Bool {
+    var focusedPid: pid_t = 0
+    guard let focusedApp = attribute(AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute),
+          CFGetTypeID(focusedApp) == AXUIElementGetTypeID(),
+          AXUIElementGetPid(focusedApp as! AXUIElement, &focusedPid) == .success,
+          focusedPid == pid,
+          let focused = attribute(app, kAXFocusedWindowAttribute) else { return false }
+    return CFEqual(focused, window)
+}
+
+func onScreenWindowOwners() -> String {
+    let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    return info.compactMap { window in
+        guard let owner = window[kCGWindowOwnerName as String] as? String else { return nil }
+        return "\(owner) (layer \(window[kCGWindowLayer as String] as? Int ?? -1))"
+    }.joined(separator: ", ")
+}
+
 func click(_ element: AXUIElement, _ label: String) throws {
     _ = AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
     Thread.sleep(forTimeInterval: 0.15)
@@ -143,9 +163,17 @@ func checkSettings() throws {
         (attribute(app, kAXWindowsAttribute) as? [AXUIElement])?.first
     }
     _ = running.activate()
+    _ = AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     _ = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
 
     func openTranscription() throws {
+        do {
+            let _: Bool = try poll("Minutes Dev frontmost with its window key") {
+                isKeyAndFrontmost(app, window, pid) ? true : nil
+            }
+        } catch {
+            throw CheckFailure("\(error); windows on screen: \(onScreenWindowOwners())")
+        }
         let settings = try poll("Settings gear") {
             lookup(window, id: "btn-settings", role: kAXButtonRole, label: "⚙")
                 ?? lookup(window, id: "btn-settings", role: kAXButtonRole, label: "Settings (")
@@ -241,6 +269,7 @@ func checkSettings() throws {
     print("PASS: native Settings engine selection, four retained fields, and local switch-back")
 }
 
+setvbuf(stdout, nil, _IOLBF, 0)
 do {
     try checkSettings()
 } catch {

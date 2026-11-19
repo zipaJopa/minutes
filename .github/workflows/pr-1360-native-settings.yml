@@ -55,7 +55,7 @@ jobs:
           mkdir -p "$profile/meetings"
           export MINUTES_CONFIG_PATH="$profile/config.toml"
           export MINUTES_DATA_DIR="$profile/data"
-          printf 'output_dir = "%s"\n[privacy]\nhide_from_screen_share = false\n' "$profile/meetings" > "$MINUTES_CONFIG_PATH"
+          printf 'output_dir = "%s"\n[privacy]\nhide_from_screen_share = false\n[calendar]\nenabled = false\n' "$profile/meetings" > "$MINUTES_CONFIG_PATH"
           "$HOME/Applications/Minutes Dev.app/Contents/MacOS/minutes-app" > "$proof/app.log" 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT

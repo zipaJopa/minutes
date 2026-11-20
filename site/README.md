@@ -8,9 +8,9 @@ do not run on Cloudflare.
 
 ```bash
 cd site
-npm ci
-npm run check:llms
-npm run build
+bun install --frozen-lockfile
+bun run check:llms
+bun run build
 ```
 
 The deployable site is written to `site/out/`.
@@ -20,7 +20,7 @@ The deployable site is written to `site/out/`.
 - Project: `useminutes`
 - Production branch: `main`
 - Root directory: `site`
-- Build command: `npm run build`
+- Build command: `bun run build`
 - Build output directory: `out`
 - Build watch include path: `site/*`
 

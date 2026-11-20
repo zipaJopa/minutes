@@ -79,6 +79,7 @@ jobs:
               package-lock.json|*/package-lock.json) ;;
               npm-shrinkwrap.json|*/npm-shrinkwrap.json) ;;
               yarn.lock|*/yarn.lock) ;;
+              bun.lock|*/bun.lock) ;;
               pnpm-lock.yaml|*/pnpm-lock.yaml) ;;
               Cargo.toml|*/Cargo.toml) ;;
               Cargo.lock|*/Cargo.lock) ;;

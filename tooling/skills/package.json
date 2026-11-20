@@ -1,4 +1,5 @@
 {
+  "packageManager": "bun@1.4.3",
   "name": "minutes-skill-tooling",
   "private": true,
   "type": "module",
@@ -12,11 +13,11 @@
     "routing:agents": "node dist/compiler/agent-routing.js",
     "skill-audit": "node dist/compiler/skill-audit.js",
     "surface-audit": "node dist/compiler/surface-audit.js",
-    "check": "node dist/compiler/check.js && npm run resolvable && npm run routing && npm run surface-audit",
+    "check": "node dist/compiler/check.js && bun run resolvable && bun run routing && bun run surface-audit",
     "golden": "node dist/compiler/golden.js",
     "golden:write": "node dist/compiler/golden.js --write",
     "doctor": "node dist/compiler/doctor.js",
-    "ci": "npm run build && npm run test && npm run check && npm run golden && npm run compile:dry"
+    "ci": "bun run build && bun run test && bun run check && bun run golden && bun run compile:dry"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

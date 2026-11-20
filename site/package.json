@@ -1,4 +1,5 @@
 {
+  "packageManager": "bun@1.4.3",
   "name": "minutes-site",
   "version": "0.1.0",
   "private": true,
@@ -7,7 +8,7 @@
     "check:llms": "node ../scripts/generate_llms_txt.mjs --check",
     "dev": "next dev --turbopack",
     "build": "next build",
-    "start": "npx --yes wrangler@4.114.0 pages dev out"
+    "start": "bunx wrangler@4.114.0 pages dev out"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
